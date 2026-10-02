@@ -40,8 +40,10 @@ public sealed class TokenService(IOptions<JwtOptions> options, TimeProvider cloc
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new(JwtRegisteredClaimNames.Name, user.UserName ?? string.Empty),
             new(JwtRegisteredClaimNames.GivenName, user.FullName),
-            new(AppClaimTypes.UserType, user.UserType.ToString())
+            new(AppClaimTypes.UserType, user.UserType.ToString()),
+            new(AppClaimTypes.SecurityStamp, StampHash(user.SecurityStamp))
         };
+        if (user.MustChangePassword) claims.Add(new(AppClaimTypes.PasswordChangeRequired, "1"));
         if (!string.IsNullOrEmpty(user.Email)) claims.Add(new(JwtRegisteredClaimNames.Email, user.Email));
         if (user.TenantId.HasValue) claims.Add(new(AppClaimTypes.TenantId, user.TenantId.Value.ToString()));
         if (subject.StaffId.HasValue) claims.Add(new(AppClaimTypes.StaffId, subject.StaffId.Value.ToString()));
@@ -73,4 +75,8 @@ public sealed class TokenService(IOptions<JwtOptions> options, TimeProvider cloc
 
     public string Hash(string refreshToken) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken)));
+
+    /// <summary>Short hash of the security stamp: lets us detect stale tokens without exposing the stamp.</summary>
+    public static string StampHash(string? securityStamp) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(securityStamp ?? string.Empty)))[..16];
 }

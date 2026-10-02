@@ -71,7 +71,7 @@ public sealed class AuditableEntityInterceptor(ICurrentUser currentUser, TimePro
         if ((entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
             && !trusted && entity.TenantId != currentUser.TenantId)
         {
-            throw new ForbiddenAccessException("Cross-tenant write blocked.");
+            throw new ForbiddenAccessException("Cross-tenant write blocked.", ErrorCodes.CrossTenantAccess);
         }
 
         if (entry.State == EntityState.Modified && entry.Property(nameof(ITenantEntity.TenantId)).IsModified)

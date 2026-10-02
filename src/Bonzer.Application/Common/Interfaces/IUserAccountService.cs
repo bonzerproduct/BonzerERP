@@ -35,4 +35,12 @@ public interface IUserAccountService
 
     /// <summary>Sets a new temporary password and returns it once.</summary>
     Task<string> ResetPasswordAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Clears a lockout caused by repeated failed logins.</summary>
+    Task UnlockAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    Task SetBranchesAsync(Guid userId, IReadOnlyList<Guid> branchIds, CancellationToken cancellationToken = default);
+
+    /// <summary>Revokes every refresh token and invalidates access tokens already issued.</summary>
+    Task EndAllSessionsAsync(Guid userId, string reason, CancellationToken cancellationToken = default);
 }
