@@ -1,0 +1,11 @@
+global using Bonzer.Domain.Common;
+global using Bonzer.Domain.Enums;
+global using Bonzer.Domain.Entities.Organization;
+global using Bonzer.Domain.Entities.Academics;
+global using Bonzer.Domain.Entities.Students;
+global using Bonzer.Domain.Entities.HumanResources;
+global using Bonzer.Domain.Entities.Attendance;
+global using Bonzer.Domain.Entities.Exams;
+global using Bonzer.Domain.Entities.Fees;
+global using Bonzer.Domain.Entities.Communication;
+global using Bonzer.Domain.Entities.Certificates;
