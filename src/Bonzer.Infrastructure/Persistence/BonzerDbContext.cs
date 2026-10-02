@@ -1,5 +1,6 @@
 using Bonzer.Infrastructure.Persistence.Conventions;
 using Bonzer.Infrastructure.Persistence.Encryption;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 
 namespace Bonzer.Infrastructure.Persistence;
@@ -14,8 +15,11 @@ public sealed class BonzerDbContext(
     DbContextOptions<BonzerDbContext> options,
     ICurrentUser currentUser,
     IFieldEncryptor encryptor)
-    : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>(options), IApplicationDbContext
+    : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>(options), IApplicationDbContext, IDataProtectionKeyContext
 {
+    /// <summary>ASP.NET Core data-protection keys (reset tokens, etc.) shared by every API instance.</summary>
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+
     // Read by the global query filters on every query (see ModelBuilderExtensions.BuildQueryFilter).
     public Guid? CurrentTenantId => currentUser.TenantId;
     public bool BypassTenantFilter => currentUser.IsSystem || currentUser.IsPlatformAdmin;

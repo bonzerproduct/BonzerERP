@@ -7,6 +7,8 @@ public static class CacheKeys
 
     public static string Lookups(Guid tenantId, string category) => $"lookups:{tenantId:N}:{category}";
 
+    public static string UserSession(Guid userId) => $"user-session:{userId:N}";
+
     public static string RolePermissions(Guid? tenantId, string role) =>
         $"perm:{(tenantId.HasValue ? tenantId.Value.ToString("N") : "system")}:{role.ToUpperInvariant()}";
 }

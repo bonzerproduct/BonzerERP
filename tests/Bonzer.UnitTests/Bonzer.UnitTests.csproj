@@ -10,6 +10,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Bonzer.Infrastructure\Bonzer.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Bonzer.Api\Bonzer.Api.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

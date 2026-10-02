@@ -1,6 +1,7 @@
 using System.Text;
 using Bonzer.Application.Features.Auth;
 using Bonzer.Application.Features.Roles;
+using Bonzer.Application.Features.Users;
 using Bonzer.Application.Security;
 using Bonzer.Infrastructure.Caching;
 using Bonzer.Infrastructure.Persistence.Encryption;
@@ -47,6 +48,8 @@ public static class DependencyInjection
 
         services.AddScoped<AuditableEntityInterceptor>();
         services.AddScoped<AuditTrailInterceptor>();
+        services.AddOptions<DatabaseLoggingOptions>().Bind(configuration.GetSection(DatabaseLoggingOptions.SectionName));
+        services.AddSingleton<SlowQueryInterceptor>();
 
         var connectionString = configuration.GetConnectionString("Database")
                                ?? throw new InvalidOperationException("ConnectionStrings:Database is not configured.");
@@ -61,7 +64,8 @@ public static class DependencyInjection
                 })
                 .UseSnakeCaseNamingConvention()
                 // Order matters: stamp / soft-delete first, then write the audit trail.
-                .AddInterceptors(sp.GetRequiredService<AuditableEntityInterceptor>(), sp.GetRequiredService<AuditTrailInterceptor>())
+                .AddInterceptors(sp.GetRequiredService<AuditableEntityInterceptor>(), sp.GetRequiredService<AuditTrailInterceptor>(),
+                    sp.GetRequiredService<SlowQueryInterceptor>())
                 .ConfigureWarnings(w => w.Ignore(CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning));
 
             if (environment.IsDevelopment())
@@ -92,7 +96,9 @@ public static class DependencyInjection
             .AddSignInManager()
             .AddDefaultTokenProviders();
 
-        services.AddDataProtection().SetApplicationName("bonzer-erp");
+        // Keys in PostgreSQL: password-reset links keep working across restarts and multiple API instances.
+        services.AddDataProtection().SetApplicationName("bonzer-erp").PersistKeysToDbContext<BonzerDbContext>();
+        services.Configure<DataProtectionTokenProviderOptions>(o => o.TokenLifespan = TimeSpan.FromMinutes(30));
 
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
@@ -119,6 +125,25 @@ public static class DependencyInjection
                     NameClaimType = JwtRegisteredClaimNames.Name,
                     RoleClaimType = AppClaimTypes.Role
                 };
+                options.Events = new JwtBearerEvents
+                {
+                    // Reject tokens of deactivated users or after a password reset / role change / "log out everywhere".
+                    OnTokenValidated = async context =>
+                    {
+                        var principal = context.Principal!;
+                        if (!Guid.TryParse(principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value, out var userId))
+                        {
+                            context.Fail(new SecurityTokenException("Token has no subject."));
+                            return;
+                        }
+                        var validator = context.HttpContext.RequestServices.GetRequiredService<SessionValidator>();
+                        if (!await validator.IsValidAsync(userId, principal.FindFirst(AppClaimTypes.SecurityStamp)?.Value,
+                                context.HttpContext.RequestAborted))
+                            context.Fail(new SessionRevokedException());
+                    },
+                    // A ProblemDetails body with a code, so clients know whether to refresh or sign in again.
+                    OnChallenge = AuthenticationProblemWriter.WriteChallengeAsync
+                };
             });
 
         services.AddScoped<ITokenService, TokenService>();
@@ -127,6 +152,12 @@ public static class DependencyInjection
         services.AddScoped<RoleResolver>();
         services.AddScoped<IUserAccountService, UserAccountService>();
         services.AddScoped<IRoleService, RoleService>();
+        services.AddScoped<IUserAdminService, UserAdminService>();
+        services.AddScoped<SessionValidator>();
+        services.AddScoped<SecurityAuditor>();
+
+        services.AddOptions<MessagingOptions>().Bind(configuration.GetSection(MessagingOptions.SectionName));
+        services.AddSingleton<IMessageSender, MessageSender>();
     }
 
     private static void AddCaching(IServiceCollection services, IConfiguration configuration)
