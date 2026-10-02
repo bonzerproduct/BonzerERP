@@ -21,6 +21,8 @@ Directory.Build.props          <- target framework, nullable, C# version (one pl
 Directory.Packages.props       <- every NuGet version (central package management)
 docker-compose.yml             <- PostgreSQL 16, Redis 7, Seq
 docs/
+  HLD.md                       <- high-level design: architecture, tenancy, security, deployment, ADRs
+  LLD.md                       <- low-level design: ER diagrams, auth flows, internals, patterns
   DB-REVIEW.md                 <- what was wrong with the old DbContext and how it was fixed
   ROADMAP.md                   <- MVP -> enterprise module plan and competitive differentiators
 src/
@@ -127,6 +129,32 @@ Rules the model enforces for you, so new entities don't need to repeat them:
 3. Register the service in `Application/DependencyInjection.cs`.
 4. Add `Api/Controllers/AttendanceController.cs` and protect actions with `[HasPermission(Permissions.Attendance.Mark)]`.
 5. If you need new permissions, add them to `Permissions.cs` and to role defaults in `AppRoles.cs`. They are seeded on the next start.
+
+## Authentication & users
+
+| Endpoint | What it does |
+|---|---|
+| `POST /auth/login` | Username, email or phone + password → access token (15 min) + refresh token (7 days). 5 failures = 15 min lockout |
+| `POST /auth/refresh` | Rotates the refresh token; re-using an old one signs the user out everywhere |
+| `POST /auth/logout` / `logout-all` | This device / every device (access tokens die immediately) |
+| `GET/PUT /auth/me` | Own profile, roles and effective permissions |
+| `POST /auth/change-password` | Returns fresh tokens; other devices are signed out |
+| `POST /auth/forgot-password` | Emails a reset link (30 min) or, without email, SMSes a 6-digit code (3 min). Always 202 |
+| `POST /auth/reset-password` | `token` (email) **or** `code` (SMS) + new password |
+| `GET /auth/sessions`, `DELETE /auth/sessions/{id}` | Signed-in devices |
+| `GET /users`, `GET /users/{id}` | Search all logins (staff, parents, students) with roles, branches, linked profile |
+| `PUT /users/{id}/roles` · `/status` · `/branches` | Assign roles, activate/deactivate, multi-branch access |
+| `POST /users/{id}/unlock` · `/reset-password` · `/logout-all` | Admin support actions |
+| `POST /users/guardians/{id}/login`, `POST /users/students/{id}/login` | Parent / student portal logins |
+| `POST /staff/{id}/login`, `PUT /staff/{id}/roles` | Employee logins (see Staff module) |
+
+All paths are under `/api/v1`. Every new or admin-reset account gets a temporary password and can only call
+`/auth/*` until it is changed. Role changes, deactivation, password resets and "log out everywhere" take
+effect on the next request: each token carries a security-stamp hash that is checked on every call (cached
+for 2 minutes). All sign-ins, failures, resets and role changes are written to `audit_logs`.
+
+Email is sent over SMTP when `Messaging:Smtp:Host` is set. Until an SMS gateway is added to `MessageSender`,
+SMS messages are only logged (with their content only in Development).
 
 ## Roles
 
